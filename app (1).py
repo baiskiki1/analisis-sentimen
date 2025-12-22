@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import re
 
-# ========== FUNGSI PREPROCESSING SEDERHANA (SESUAI DATA TRAINING) ==========
+# ========== FUNGSI PREPROCESSING SEDERHANA ==========
 def simple_preprocess(text: str) -> str:
     # Sesuaikan dengan preprocessing saat membuat Hasil_Preprocessing_Data.csv
     text = text.lower()
@@ -48,8 +48,8 @@ st.sidebar.markdown(
     """
 - **Model**: Support Vector Machine (SVM) dengan kernel RBF  
 - **Fitur**: TF‑IDF (unigram–bigram)  
-- **Input**: Teks hasil komentar/ulasan berbahasa Indonesia  
-- **Tips**: Gunakan teks yang sudah cukup bersih (tanpa emoji berlebihan)  
+- **Input**: Teks komentar/ulasan berbahasa Indonesia  
+- **Tips**: Gunakan teks yang sudah cukup bersih (tanpa emoji berlebihan).  
 """
 )
 st.sidebar.markdown("---")
@@ -73,7 +73,11 @@ with tab1:
             placeholder="Contoh: Pelayanannya cepat dan sangat memuaskan..."
         )
 
-   
+        # DEFINISI THRESHOLD DIPINDAHKAN KE SINI
+        threshold = st.slider(
+            "Threshold confidence (batas keyakinan model)",
+            0.1, 0.9, 0.5, 0.05
+        )
 
         if st.button("Prediksi Sentimen", type="primary"):
             if text.strip() == "":
@@ -91,20 +95,21 @@ with tab1:
                 label = le.inverse_transform([pred])[0]
                 conf  = float(np.max(proba))
 
-                # Tentukan kategori terhadap threshold (optional)
                 is_confident = conf >= threshold
 
                 st.subheader("Hasil Prediksi")
                 st.write(f"**Teks (preprocess):** `{cleaned}`")
-                st.write(f"**Sentimen:** {label}")
-                st.write(f"**Confidence:** {conf:.2%} "
-                         f"({'di atas' if is_confident else 'di bawah'} threshold)")
+                st.write(
+                    f"**Sentimen:** {label}  \n"
+                    f"**Confidence:** {conf:.2%} "
+                    f"({'di atas' if is_confident else 'di bawah'} threshold {threshold:.2f})"
+                )
 
                 st.progress(conf)
 
                 st.write("Probabilitas:")
-                st.write(f"- positif: {proba[1]:.2%}")
-                st.write(f"- negatif: {proba[0]:.2%}")
+                st.write(f"- Positif: {proba[1]:.2%}")
+                st.write(f"- Negatif: {proba[0]:.2%}")
 
     with col2:
         st.subheader("Contoh Cepat")
@@ -120,22 +125,25 @@ with tab1:
             ex_clean = simple_preprocess(ex)
             X_ex = vectorizer.transform([ex_clean])
             proba_ex = model.predict_proba(X_ex)[0]
-            pred_ex  = le.inverse_transform(model.predict(X_ex))[0]
+            pred_ex  = model.predict(X_ex)[0]
+            label_ex = le.inverse_transform([pred_ex])[0]
             conf_ex  = float(np.max(proba_ex))
 
             st.write(f"**Teks:** {ex}")
             st.write(f"Preprocess: `{ex_clean}`")
-            st.write(f"Prediksi: `{pred_ex}` (conf: {conf_ex:.2%})")
+            st.write(f"Prediksi: `{label_ex}` (conf: {conf_ex:.2%})")
             st.markdown("---")
 
-    st.caption("Catatan: preprocessing di app disederhanakan, sesuaikan dengan pipeline training Anda.")
+    st.caption(
+        "Catatan: preprocessing di app disederhanakan; sesuaikan dengan pipeline training Anda."
+    )
 
 # ---------- TAB 2: BATCH EVALUATION ----------
 with tab2:
     st.subheader("Evaluasi Batch dari File CSV")
     st.write(
         "Upload file `.csv` dengan minimal satu kolom bernama `text`. "
-        "Jika ada kolom label bernama `label`, akan dihitung akurasi & confusion matrix."
+        "Jika ada kolom `label`, akan dihitung akurasi & confusion matrix."
     )
 
     if uploaded_file is not None:
@@ -158,36 +166,45 @@ with tab2:
             df["prob_neg"] = proba_batch[:, 0]
 
             st.write("Contoh hasil prediksi:")
-            st.dataframe(df[["text", "text_clean", "pred_label", "prob_pos", "prob_neg"]].head(20))
+            st.dataframe(
+                df[["text", "text_clean", "pred_label", "prob_pos", "prob_neg"]].head(20)
+            )
 
             # Kalau ada label ground-truth
             if "label" in df.columns:
-                from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+                from sklearn.metrics import (
+                    accuracy_score,
+                    classification_report,
+                    confusion_matrix,
+                )
                 import seaborn as sns
                 import matplotlib.pyplot as plt
 
-                # Asumsi label sama format dengan yang dipakai saat training (Positif/Negatif)
                 y_true = df["label"]
-                # Map ke encoder jika perlu
+
                 try:
+                    # Pastikan format label sama dengan encoder (misal 'Positif'/'Negatif')
                     y_true_enc = le.transform(y_true)
                     acc = accuracy_score(y_true_enc, pred_batch)
                     st.write(f"**Accuracy batch:** {acc:.4f}")
 
                     st.text("Classification report:")
                     report = classification_report(
-                        y_true_enc, pred_batch,
-                        target_names=le.classes_
+                        y_true_enc, pred_batch, target_names=le.classes_
                     )
                     st.text(report)
 
-                    # Confusion matrix
                     cm = confusion_matrix(y_true_enc, pred_batch)
 
                     fig, ax = plt.subplots(figsize=(4, 3))
                     sns.heatmap(
-                        cm, annot=True, fmt="d", cmap="Blues",
-                        xticklabels=le.classes_, yticklabels=le.classes_, ax=ax
+                        cm,
+                        annot=True,
+                        fmt="d",
+                        cmap="Blues",
+                        xticklabels=le.classes_,
+                        yticklabels=le.classes_,
+                        ax=ax,
                     )
                     ax.set_xlabel("Predicted")
                     ax.set_ylabel("Actual")
@@ -196,11 +213,14 @@ with tab2:
                 except Exception as e:
                     st.warning(
                         "Gagal menghitung akurasi, kemungkinan format kolom `label` "
-                        "tidak sama dengan label encoder."
+                        "tidak sama dengan label encoder (misalnya beda penulisan)."
                     )
                     st.exception(e)
     else:
         st.info("Belum ada file yang di-upload.")
 
 st.markdown("---")
-st.caption("App ini menggunakan SVM + TF‑IDF. Untuk hasil terbaik, samakan preprocessing di training dan di app.")
+st.caption(
+    "App ini menggunakan SVM + TF‑IDF. Untuk hasil terbaik, samakan preprocessing di training dan di app."
+)
+
