@@ -103,8 +103,8 @@ with tab1:
                 st.progress(conf)
 
                 st.write("Probabilitas:")
-                st.write(f"- Positif: {proba[1]:.2%}")
-                st.write(f"- Negatif: {proba[0]:.2%}")
+                st.write(f"- negatif: {proba[1]:.2%}")
+                st.write(f"- positif: {proba[0]:.2%}")
 
     with col2:
         st.subheader("Contoh Cepat")
