@@ -73,7 +73,7 @@ with tab1:
             placeholder="Contoh: Pelayanannya cepat dan sangat memuaskan..."
         )
 
-        threshold = st.slider("Threshold confidence positif", 0.1, 0.9, 0.5, 0.05)
+   
 
         if st.button("Prediksi Sentimen", type="primary"):
             if text.strip() == "":
@@ -103,8 +103,8 @@ with tab1:
                 st.progress(conf)
 
                 st.write("Probabilitas:")
-                st.write(f"- negatif: {proba[1]:.2%}")
-                st.write(f"- positif: {proba[0]:.2%}")
+                st.write(f"- positif: {proba[1]:.2%}")
+                st.write(f"- negatif: {proba[0]:.2%}")
 
     with col2:
         st.subheader("Contoh Cepat")
