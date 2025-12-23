@@ -139,85 +139,74 @@ with tab1:
     )
 
 # ---------- TAB 2: BATCH EVALUATION ----------
+# ---------- TAB 2: BATCH EVALUATION ----------
 with tab2:
     st.subheader("Evaluasi Batch dari File CSV")
     st.write(
         "Upload file `.csv` dengan minimal satu kolom bernama `text`. "
-        "Jika ada kolom `label`, akan dihitung akurasi & confusion matrix."
+        "Jika ada kolom `label`, akan dihitung akurasi."
     )
 
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
 
         if "text" not in df.columns:
-            st.error("CSV harus punya kolom `text`.")
+            st.error("❌ CSV harus punya kolom `text`.")
         else:
-            # Preprocess kolom text
+            # Preprocess
             df["text_clean"] = df["text"].astype(str).apply(simple_preprocess)
-
-            # Transform & predict
             X_batch = vectorizer.transform(df["text_clean"])
             proba_batch = model.predict_proba(X_batch)
             pred_batch = model.predict(X_batch)
             label_batch = le.inverse_transform(pred_batch)
 
             df["pred_label"] = label_batch
-            df["prob_pos"] = proba_batch[:, 1]
-            df["prob_neg"] = proba_batch[:, 0]
+            df["confidence"] = np.max(proba_batch, axis=1)
 
-            st.write("Contoh hasil prediksi:")
-            st.dataframe(
-                df[["text", "text_clean", "pred_label", "prob_pos", "prob_neg"]].head(20)
-            )
+            # Tampilkan hasil
+            st.dataframe(df[["text", "text_clean", "pred_label", "confidence"]].head(20))
 
-            # Kalau ada label ground-truth
+            # METRIK RINGKASAN (TANPA SEABORN)
+            st.subheader("📊 Ringkasan Hasil")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                positif = (df["pred_label"] == le.classes_[1]).sum()
+                st.metric("Positif", positif)
+            with col2:
+                negatif = (df["pred_label"] == le.classes_[0]).sum()
+                st.metric("Negatif", negatif)
+            with col3:
+                rata_conf = df["confidence"].mean()
+                st.metric("Rata-rata Confidence", f"{rata_conf:.1%}")
+            with col4:
+                st.metric("Total Teks", len(df))
+
+            # DOWNLOAD HASIL
+            csv_result = df[["text", "text_clean", "pred_label", "confidence"]].to_csv(index=False)
+            st.download_button("💾 Download Hasil", csv_result, "hasil_prediksi.csv")
+
+            # Akurasi jika ada ground truth
             if "label" in df.columns:
-                from sklearn.metrics import (
-                    accuracy_score,
-                    classification_report,
-                    confusion_matrix,
-                )
-                import seaborn as sns
-                import matplotlib.pyplot as plt
-
-                y_true = df["label"]
-
+                st.subheader("✅ Evaluasi Akurasi")
                 try:
-                    # Pastikan format label sama dengan encoder (misal 'Positif'/'Negatif')
-                    y_true_enc = le.transform(y_true)
-                    acc = accuracy_score(y_true_enc, pred_batch)
-                    st.write(f"**Accuracy batch:** {acc:.4f}")
-
-                    st.text("Classification report:")
-                    report = classification_report(
-                        y_true_enc, pred_batch, target_names=le.classes_
-                    )
-                    st.text(report)
-
-                    cm = confusion_matrix(y_true_enc, pred_batch)
-
-                    fig, ax = plt.subplots(figsize=(4, 3))
-                    sns.heatmap(
-                        cm,
-                        annot=True,
-                        fmt="d",
-                        cmap="Blues",
-                        xticklabels=le.classes_,
-                        yticklabels=le.classes_,
-                        ax=ax,
-                    )
-                    ax.set_xlabel("Predicted")
-                    ax.set_ylabel("Actual")
-                    ax.set_title("Confusion Matrix (Batch CSV)")
-                    st.pyplot(fig)
+                    from sklearn.metrics import accuracy_score, classification_report
+                    
+                    # Map label CSV ke encoder
+                    label_map = {le.classes_[i]: i for i in range(len(le.classes_))}
+                    y_true_mapped = df["label"].map(label_map)
+                    
+                    # Hitung akurasi
+                    acc = accuracy_score(y_true_mapped.dropna(), pred_batch[y_true_mapped.notna()])
+                    st.success(f"**Akurasi: {acc:.2%}** ({len(y_true_mapped.dropna())} sampel)")
+                    
+                    # Report sederhana
+                    st.info(classification_report(y_true_mapped.dropna(), pred_batch[y_true_mapped.notna()]))
+                    
                 except Exception as e:
-                    st.warning(
-                        "Gagal menghitung akurasi, kemungkinan format kolom `label` "
-                        "tidak sama dengan label encoder (misalnya beda penulisan)."
-                    )
-                    st.exception(e)
+                    st.warning("⚠️ Format kolom `label` tidak cocok. Cek: " + str(e))
     else:
-        st.info("Belum ada file yang di-upload.")
+        st.info("📁 Upload CSV di sidebar untuk analisis batch.")
+
 
 st.markdown("---")
 st.caption(
